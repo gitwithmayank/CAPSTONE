@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    font-family: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: #05060d;
+    color: #e2e8f0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+  }
+
+  ::selection {
+    background-color: rgba(139, 92, 246, 0.45);
+    color: #fff;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #2c2f3e transparent;
+  }
+}
+
+/* Custom scrollbars for the panels */
+.sb-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.sb-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sb-scroll::-webkit-scrollbar-thumb {
+  background: #2c2f3e;
+  border-radius: 999px;
+}
+.sb-scroll::-webkit-scrollbar-thumb:hover {
+  background: #3d4158;
+}
+
+/* Blinking caret for the terminal */
+.sb-caret {
+  animation: sb-blink 1.1s steps(2, start) infinite;
+}
+@keyframes sb-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* Soft glow used through the landing page */
+.sb-glow {
+  background: radial-gradient(
+    ellipse 60% 50% at 50% 0%,
+    rgba(139, 92, 246, 0.18),
+    rgba(139, 92, 246, 0.04) 55%,
+    transparent 75%
+  );
+}
+
+/* Fade / slide entrance used by panels */
+@keyframes sb-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.sb-rise {
+  animation: sb-rise 0.28s ease-out both;
+}
+
+@keyframes sb-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.sb-fade {
+  animation: sb-fade 0.4s ease-out both;
+}
+
+/* The /icons.svg sprite is drawn in dark colours; flip it for dark surfaces */
+.sb-icon-invert {
+  filter: invert(1) brightness(2);
+}
+
+/* Typing indicator dots */
+.sb-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #a78bfa;
+  animation: sb-dot-bounce 1.2s infinite ease-in-out;
+}
+@keyframes sb-dot-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}

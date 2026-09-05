@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-deployment
+  labels:
+    name: ai-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-server
+  template:
+    metadata:
+      labels:
+        app: ai-server
+    spec:
+      containers:
+        - name: ai-server
+          image: ai-orchestration
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "250M"
+            limits:
+              cpu: "500m"
+              memory: "500M"
+          env:
+            - name: MISTRAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: my-secret
+                  key: MISTRAL_API_KEY
+
+          livenessProbe:
+            httpGet:
+              path: /api/status/healthz
+              port: 3000
+            initialDelaySeconds: 90
+            timeoutSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /api/status/readyz
+              port: 3000
+            initialDelaySeconds: 30
+            timeoutSeconds: 10
+          ports:
+          - containerPort: 3000
+            name: ai-server-port
