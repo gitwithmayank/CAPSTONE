@@ -7,15 +7,20 @@ import {
   RefreshIcon,
 } from './Icons.jsx'
 
-export default function PreviewPanel({ sandboxId, html, generating, status }) {
-  const [frameKey, setFrameKey] = useState(0)
+export default function PreviewPanel({ sandboxId, src, html, frameKey = 0, generating, status }) {
+  const [localKey, setLocalKey] = useState(0)
   const [copied, setCopied] = useState(false)
+  const frame = frameKey + localKey
 
   function refresh() {
-    setFrameKey((k) => k + 1)
+    setLocalKey((k) => k + 1)
   }
 
   function openExternal() {
+    if (src) {
+      window.open(src, '_blank', 'noopener')
+      return
+    }
     if (!html) return
     const blob = new Blob([html], { type: 'text/html' })
     const url = URL.createObjectURL(blob)
@@ -33,7 +38,7 @@ export default function PreviewPanel({ sandboxId, html, generating, status }) {
     }
   }
 
-  const busy = generating || !html
+  const busy = generating || (!src && !html)
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0b0d16]">
@@ -41,7 +46,7 @@ export default function PreviewPanel({ sandboxId, html, generating, status }) {
         <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5">
           <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" />
           <span className="truncate font-mono text-xs text-slate-400">
-            sandbox://{sandboxId}/preview
+            {src ?? `sandbox://${sandboxId}/preview`}
           </span>
         </div>
         <button
@@ -69,7 +74,7 @@ export default function PreviewPanel({ sandboxId, html, generating, status }) {
         <button
           type="button"
           onClick={openExternal}
-          disabled={!html}
+          disabled={!src && !html}
           className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
         >
           <ExternalIcon className="h-3.5 w-3.5" />
@@ -78,12 +83,19 @@ export default function PreviewPanel({ sandboxId, html, generating, status }) {
       </header>
 
       <div className="relative flex-1 bg-white">
-        {html ? (
+        {src ? (
           <iframe
-            key={frameKey}
+            key={frame}
+            src={src}
+            title="Live preview"
+            className="absolute inset-0 h-full w-full bg-white"
+          />
+        ) : html ? (
+          <iframe
+            key={frame}
             title="Live preview"
             srcDoc={html}
-            sandbox="allow-scripts allow-same-origin"
+            sandbox="allow-scripts"
             className="absolute inset-0 h-full w-full bg-white"
           />
         ) : (

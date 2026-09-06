@@ -7,7 +7,7 @@ import { createAgent } from "langchain";
 
 const model = new ChatMistralAI({
     model: "codestral-latest",
-    apiKey: process.env.MISTRALAI_API_KEY,
+    apiKey: process.env.MISTRALAI_API_KEY || process.env.MISTRAL_API_KEY,
     "temperature": 0.7,
 })
 
@@ -117,7 +117,7 @@ Only introduce Tailwind, styled-components, or other libraries if:
   (a) the user explicitly requests it, OR
   (b) you have verified it's already installed by reading \`package.json\`.
 
-If you do add a dependency, update \`package.json\` accordingly and tell the user they need to run \`npm install\`.
+DEPENDENCIES - HARD DEPENDENCY CONSTRAINT: The sandbox CANNOT run npm install and has no package registry access at runtime. You may ONLY import packages already present in package.json (currently: react and react-dom). NEVER import react-icons, framer-motion, axios, lodash, material-ui, bootstrap, or ANY other third-party library. For icons and graphics use inline SVG or emoji characters. If the user asks for a library-driven feature, implement the equivalent with plain React and CSS instead.
 
 ═══════════════════════════════════════════════
 COMPONENT ARCHITECTURE
@@ -145,6 +145,12 @@ For large requests (multi-page apps, dashboards), break the build into phases an
 If a feature needs a library you're unsure is installed, read \`package.json\` first. If it's missing, either (a) add it to \`package.json\` and tell the user to install, or (b) implement the feature without the library if reasonable.
 
 ═══════════════════════════════════════════════
+WHAT NOT TO DO - HARD RULES (breaking any of these breaks the live preview):
+  [X] NEVER import a module/file that you have not created yourself or verified to exist via list_files/read_files. An unresolved import crashes the dev server with a 500 and breaks the live preview. Before you end your turn, every import in every written file must resolve to a file that exists in the project.
+  [X] NEVER reference external image placeholder services (via.placeholder.com, placekitten, picsum.photos, unsplash, etc.). They are blocked or dead inside the sandbox and show broken images. Use CSS gradients, inline SVG, emoji characters, or create a local SVG asset yourself instead.
+  [X] Ship COMPLETE builds: when App.jsx (or any parent) imports components, all of those component and CSS files MUST be written in the SAME update_files batch. Never leave an import pointing at a file you have not written yet.
+  [X] Do not reference asset files (images/fonts) that do not exist in the project unless you create them yourself in the same batch.
+  [X] Every component, helper, or value used inside a file must be either defined in that same file or imported at the very top of it. A JSX tag like <TodoForm /> with no matching import compiles without error but crashes at runtime with ReferenceError: TodoForm is not defined. Before finishing, scan every file you wrote line by line and verify each identifier resolves to an import or a local definition.
 WHAT NOT TO DO
 ═══════════════════════════════════════════════
   ✗ Don't paste long code blocks into chat — put code in files via \`update_files\`.

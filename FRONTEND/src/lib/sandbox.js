@@ -90,63 +90,129 @@ function inferKind(prompt = '') {
 }
 
 // ---------------------------------------------------------------------------
-// Backend attempts. If any of these respond we use their result; otherwise
-// the caller falls back to the local generator.
+// Live-backend helpers.
+//
+// The sandbox backend lives in the cluster and is reachable through the nginx
+// ingress (see k8s/ingress.yml):
+//   GET  /api/sandbox/health   -> sandbox-server health
+//   POST /api/sandbox/start    -> creates a pod + service, returns { sandboxId, previewUrl }
+//   POST /api/ai/invoke      -> ai-orchestration SSE stream (message + projectId)
+//
+// If the backend is not reachable we skip the network entirely and use the
+// local prompt-driven generator below. VITE_API_URL can override the base when
+// the frontend is not served behind the same ingress (e.g. served static).
 // ---------------------------------------------------------------------------
 
-async function tryBackend(prompt) {
-  const payload = { prompt, message: prompt, source: 'web' }
+const BACKEND_TIMEOUT = 4000
 
-  const attempts = [
-    { url: `${API_BASE}/app/generate`, data: payload },
-    { url: `${API_BASE}/app/chat`, data: payload },
-    { url: `${API_BASE}/api/generate`, data: payload },
-    { url: `${API_BASE}/api/chat`, data: payload },
-  ]
+export async function detectBackend() {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), BACKEND_TIMEOUT)
+  try {
+    const res = await fetch(`${API_BASE}/api/sandbox/health`, { signal: controller.signal })
+    return res.ok
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
-  for (const attempt of attempts) {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 4000)
-    try {
-      const res = await fetch(attempt.url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(attempt.data),
-        signal: controller.signal,
-      })
-      clearTimeout(timer)
-      if (!res.ok) continue
-      const json = await res.json().catch(() => null)
-      const html = json?.html ?? json?.code ?? json?.content ?? json?.result
-      if (typeof html === 'string' && html.trim().length > 0) {
-        return { html, message: 'From backend', backend: true }
+export async function createSandbox() {
+  const res = await fetch(`${API_BASE}/api/sandbox/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+  if (!res.ok) throw new Error(`Sandbox backend responded with ${res.status}`)
+  const json = await res.json().catch(() => null)
+  if (!json?.sandboxId) throw new Error('Sandbox backend did not return a sandboxId')
+  return {
+    sandboxId: json.sandboxId,
+    previewUrl: json.previewUrl || `http://${json.sandboxId}.preview.localhost`,
+  }
+}
+
+// Streams a prompt to the ai-orchestration agent and gathers the SSE frames.
+// Returns a { message, backend, live } result, or null when the call fails.
+async function invokeAgent(prompt, projectId, { onStatus, onChunk } = {}) {
+  onStatus?.('Sending prompt to the AI builder…')
+  const res = await fetch(`${API_BASE}/api/ai/invoke`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: prompt, projectId }),
+  })
+  if (!res.ok) return null
+
+  const text = await res.text()
+  const frames = []
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('data:')) continue
+    const data = line.replace(/^data:\s*/, '').trim()
+    if (!data) continue
+    frames.push(data)
+  }
+  if (!frames.length) return null
+
+  const parsed = frames
+    .map((f) => {
+      try {
+        return JSON.parse(f)
+      } catch {
+        return f
       }
-    } catch {
-      clearTimeout(timer)
+    })
+
+  // Surface backend errors (bad API key, model failure, …) instead of
+  // pretending the build succeeded.
+  for (const frame of parsed) {
+    if (frame && frame.error) {
+      onStatus?.('Backend reported an error — check the AI service logs')
+      return { message: `Backend error: ${frame.error}`, backend: true, live: true }
     }
   }
-  return null
+
+  const payloads = parsed.filter(
+    (f) => typeof f === 'string' || (f && (f.content || f.message || f.data || f.output)),
+  )
+
+  onChunk?.(frames[frames.length - 1])
+
+  const last = payloads[payloads.length - 1]
+  let reply = null
+  if (typeof last === 'string') {
+    reply = last
+  } else if (last) {
+    reply = last.content ?? last.message ?? last.data ?? last.output
+  }
+  if (typeof reply === 'string' && reply.trim()) {
+    onStatus?.('AI finished — refreshing preview')
+    return { message: reply.slice(0, 4000), backend: true, live: true }
+  }
+
+  return { message: 'Done — sandbox files are updated, check the preview.', backend: true, live: true }
 }
 
 // ---------------------------------------------------------------------------
 // Public API used by the UI
 // ---------------------------------------------------------------------------
 
-export async function chatWithAI(prompt, { onStatus } = {}) {
+export async function chatWithAI(prompt, { projectId, onStatus, onChunk } = {}) {
   if (typeof prompt !== 'string' || prompt.trim() === '') {
     throw new Error('Prompt cannot be empty')
   }
 
-  onStatus?.('Connecting to model…')
-  const backend = await tryBackend(prompt)
-
-  if (backend) {
-    onStatus?.(`Received response from backend`)
-    return {
-      html: backend.html,
-      message: 'Generated with the connected backend model.',
-      backend: true,
+  // Live mode: the workspace came from the real sandbox backend, so we ask
+  // the cluster agent to write the files into the sandbox directly.
+  if (projectId) {
+    onStatus?.('Talking to the AI builder…')
+    try {
+      const live = await invokeAgent(prompt, projectId, { onStatus, onChunk })
+      if (live) return live
+    } catch {
+      // fall through to the local generator
     }
+    onStatus?.('Cloud builder unavailable — generating locally…')
   }
 
   // Local fallback generation (staged so the UI feels alive)

@@ -5,17 +5,27 @@ import TerminalPanel from './TerminalPanel.jsx'
 import { LogoMark, PlusIcon, SparklesIcon } from './Icons.jsx'
 import { chatWithAI, starterSandbox } from '../lib/sandbox.js'
 
-export default function Workspace({ sandboxId, onNewSandbox }) {
-  const [html, setHtml] = useState(() => starterSandbox())
+export default function Workspace({ sandboxId, live, previewUrl, onNewSandbox }) {
+  const [html, setHtml] = useState(() => (live ? null : starterSandbox()))
   const [generating, setGenerating] = useState(false)
   const [status, setStatus] = useState('')
+  const [frameKey, setFrameKey] = useState(0)
 
   async function runGeneration(prompt) {
     setGenerating(true)
-    setStatus('Thinking about your request…')
+    setStatus(live ? 'Contacting the AI builder…' : 'Thinking about your request…')
     try {
-      const res = await chatWithAI(prompt, { onStatus: setStatus })
-      setHtml(res.html)
+      const res = await chatWithAI(prompt, {
+        projectId: live ? sandboxId : null,
+        onStatus: setStatus,
+      })
+      if (res.live) {
+        // Live sandbox: the agent edited files in the pod, so give the iframe
+        // a nudge to re-read the Vite dev server (HMR may already handle it).
+        setFrameKey((k) => k + 1)
+      } else {
+        setHtml(res.html)
+      }
       return res
     } finally {
       setGenerating(false)
@@ -67,6 +77,8 @@ export default function Workspace({ sandboxId, onNewSandbox }) {
           <PreviewPanel
             sandboxId={sandboxId}
             html={html}
+            src={live ? previewUrl : null}
+            frameKey={frameKey}
             generating={generating}
             status={status}
           />
