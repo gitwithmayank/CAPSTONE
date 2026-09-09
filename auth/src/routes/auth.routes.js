@@ -10,7 +10,8 @@ router.get("/google",passport.authenticate("google", {
     scope: ["profile", "email"] }));
 
 router.get("/google/callback", passport.authenticate("google", {
-   failureRedirect: "/login"
+     session: false, 
+  failureRedirect: "/"
    }), async (req, res) => {
   try {
     const { id, displayName, emails, photos } = req.user;
@@ -25,20 +26,20 @@ router.get("/google/callback", passport.authenticate("google", {
       await user.save();
   } 
       
-      await sendAuthNotification({
-            userId: user._id,
-            action: 'google_login',
-            timestamp: new Date(),
-            email: emails[ 0 ].value
-        })
+      // await sendAuthNotification({
+      //       userId: user._id,
+      //       action: 'google_login',
+      //       timestamp: new Date(),
+      //       email: emails[ 0 ].value
+      //   })
 
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
   res.cookie("token", token, {httpOnly: true });
-  res.redirect("/dashboard");
-  }catch (error) {
-    console.error("Error during Google authentication callback:", error);
-    res.redirect("/login");
-  }
-});
+
+     res.redirect("http://localhost:5173/");
+    } catch (error) {
+      console.error("Error during Google authentication callback:", error);
+      res.redirect("http://localhost:5173/");
+    }});
 
 export default router;
