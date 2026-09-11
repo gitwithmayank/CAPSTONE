@@ -4,6 +4,7 @@ import morgan from 'morgan';
 import { createProxyMiddleware } from "http-proxy-middleware";
 import http from 'http';
 import { createProxyServer } from 'httpxy';
+import {refreshTTTl} from "./config/redis.js";
 
 const app = express();
 

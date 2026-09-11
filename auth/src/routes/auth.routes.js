@@ -7,7 +7,8 @@ import jwt from "jsonwebtoken";
 const router = Router();
 
 router.get("/google",passport.authenticate("google", {
-    scope: ["profile", "email"] }));
+  session: false,
+  scope: ["profile", "email"] }));
 
 router.get("/google/callback", passport.authenticate("google", {
      session: false, 
