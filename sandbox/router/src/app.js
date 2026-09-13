@@ -4,7 +4,7 @@ import morgan from 'morgan';
 import { createProxyMiddleware } from "http-proxy-middleware";
 import http from 'http';
 import { createProxyServer } from 'httpxy';
-import {refreshTTTl} from "./config/redis.js";
+import {refreshTTL} from "./config/redis.js";
 
 const app = express();
 
@@ -65,9 +65,15 @@ app.use(async (req, res, next) => {
     const sandboxId = host.split('.')[0];
     const type = host.split('.')[1];
 
-    if (type === 'agent') {
+     await refreshTTL(sandboxId);
+
+
+
+
+
+    if (host.split('.')[1] === 'agent') {
         return getAgentProxy(sandboxId)(req, res, next);
-    } else if (type === 'preview') {
+    } else if (host.split('.')[1] === 'preview') {
         return getProxy(sandboxId)(req, res, next);
     }
 
@@ -95,7 +101,7 @@ server.on('upgrade', (req, socket, head) => {
         `WS upgrade request: ${host}, sandboxId: ${sandboxId}, type: ${type}`
     );
 
-    if (type === 'agent') {
+    if (host.split('.')[1] === 'agent') {
         wsProxy.ws(
             req,
             socket,
@@ -105,7 +111,7 @@ server.on('upgrade', (req, socket, head) => {
             head
         ).catch(() => socket.destroy());
 
-    } else if (type === 'preview') {
+    } else if (host.split('.')[1] === 'preview') {
         wsProxy.ws(
             req,
             socket,

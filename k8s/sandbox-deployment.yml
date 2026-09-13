@@ -47,6 +47,7 @@ spec:
                 secretKeyRef:
                   name: database
                   key: SANDBOX
+                  
           readinessProbe:
             httpGet:
               path: /api/sandbox/health
