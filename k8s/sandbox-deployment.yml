@@ -41,7 +41,11 @@ spec:
                   name: database
                   key: REDIS_URL
 
-
+            - name: JWT_SECRET
+              valueFrom :
+                secretKeyRef:
+                  name: jwt
+                  key: JWT_SECRET
             - name: MONGO_URI
               valueFrom :
                 secretKeyRef:

@@ -18,13 +18,6 @@ router.get("/google/callback", passport.authenticate("google", {
     const { id, displayName, emails, photos } = req.user;
     let user = await User.findOne({ googleId: id });
     
-    await sendAuthNotification({
-      userId: user._id,
-      action: "google_login",
-      timestamp:  new Date(),
-      emails: emails[0].value
-    })
-    
     if (!user) {
       user = new User({
         googleId: id,
@@ -33,22 +26,22 @@ router.get("/google/callback", passport.authenticate("google", {
         avatar: photos[0].value
       });
       await user.save();
-  } 
-      
-      // await sendAuthNotification({
-      //       userId: user._id,
-      //       action: 'google_login',
-      //       timestamp: new Date(),
-      //       email: emails[ 0 ].value
-      //   })
+    }
+
+    await sendAuthNotification({
+      userId: user._id,
+      action: "google_login",
+      timestamp:  new Date(),
+      email: emails[0].value
+    })
 
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
   res.cookie("token", token, {httpOnly: true });
 
-     res.redirect("http://localhost:5173/");
+     res.redirect("http://localhost:5173");
     } catch (error) {
       console.error("Error during Google authentication callback:", error);
-      res.redirect("http://localhost:5173/");
+      res.redirect("/");
     }});
 
 export default router;
