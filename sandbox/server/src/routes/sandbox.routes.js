@@ -48,7 +48,7 @@ router.post("/start",authMiddleware,async (req,res)=>{
   const sandboxId = uuid();
 
   await Promise.all([
-    createPod(sandboxId),
+    createPod(sandboxId, projectId),
     createService(sandboxId),
     createSandboxKey(sandboxId)
   ]);
