@@ -91,7 +91,7 @@ export async function createPod(sandboxId,projectId) {
                         },
                         {
                             name: 'AWS_SECRET_ACCESS_KEY',
-                            valueFrom: { secretKeyRef: { name: 'aws', key: 'AWS_SECET_ACCESS_KEY' } }
+                            valueFrom: { secretKeyRef: { name: 'aws', key: 'AWS_SECRET_ACCESS_KEY' } }
                         }
                     ],
                     resources: {

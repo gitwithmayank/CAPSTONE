@@ -12,6 +12,11 @@ const router = Router();
 router.post('/project', authMiddleware, async(req,res)=>{
     const {title} = req.body;
 
+    // title request body me required hai
+    if (!title || typeof title !== 'string' || !title.trim()) {
+        return res.status(400).json({ message: 'title is required' });
+    }
+
     const newProject = new Project({
         user: req.user.id,
         title
@@ -27,38 +32,57 @@ router.post('/project', authMiddleware, async(req,res)=>{
 
 
 router.get("/projects", authMiddleware, async (req,res)=>{
-  const projects = await Project.findOne({user: req.user.id});
+  const projects = await Project.find({user: req.user.id}).sort({ _id: -1 });
     
   return res.status(200).json({
-    message: 'Project retrived successfully',
+    message: 'Projects retrieved successfully',
     projects
   })
 
 })
 
 router.post("/start",authMiddleware,async (req,res)=>{
-  
-    const projectId = req.body.projectId;
+  try {
+    const { projectId } = req.body;
+    let project = null;
 
-    const project = await Project.findOne({ _id: projectId, user: req.user.id});
-    if(!project) {
-        return res.status(404).json({message: 'Project not found or access denied'})
+    if (projectId) {
+      // Agar projectId diya gaya hai to ownership verify karo
+      try {
+        project = await Project.findOne({ _id: projectId, user: req.user.id });
+      } catch (err) {
+        project = null; // invalid ObjectId format
+      }
+      if (!project) {
+        return res.status(404).json({ message: 'Project not found or access denied' });
+      }
+    } else {
+      // Frontend bina projectId ke bhi aa sakta hai:
+      // user ka latest project use karo, warna naya project bana do.
+      project = await Project.findOne({ user: req.user.id }).sort({ _id: -1 });
+      if (!project) {
+        project = await Project.create({ user: req.user.id, title: 'My Sandbox' });
+      }
     }
-   
-  const sandboxId = uuid();
 
-  await Promise.all([
-    createPod(sandboxId, projectId),
-    createService(sandboxId),
-    createSandboxKey(sandboxId)
-  ]);
+    const sandboxId = uuid();
 
-  return res.status(201).json({
-    message: ' sandbox environment created successfully',
-    sandboxId,
-    previewUrl: `http://${sandboxId}.preview.localhost`
-  });
+    await Promise.all([
+      createPod(sandboxId, project._id),
+      createService(sandboxId),
+      createSandboxKey(sandboxId),
+    ]);
 
+    return res.status(201).json({
+      message: 'sandbox environment created successfully',
+      sandboxId,
+      projectId: project._id,
+      previewUrl: `http://${sandboxId}.preview.localhost`,
+    });
+  } catch (err) {
+    console.error('Error starting sandbox:', err);
+    return res.status(500).json({ message: 'Failed to start sandbox' });
+  }
 });
 
 

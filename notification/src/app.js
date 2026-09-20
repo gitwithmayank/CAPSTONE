@@ -1,7 +1,7 @@
 import express from 'express';
 import morgan from 'morgan';
 import { sendEmail } from './email.js';
-import channel from './mq.js';
+import { startMq, registerConsumer, getChannel } from './mq.js';
 
 const app = express();
 app.use(morgan('dev'));
@@ -19,8 +19,11 @@ app.get("/_status/readyz", (req, res) => {
 });
 
 
-channel.consume('auth_notification_queue', async (msg) => {
+// MQ background me connect hota hai (retry ke saath) — server start
+// block/crash nahi hoga chahe RabbitMQ ya DNS down ho.
+startMq();
 
+const onMessage = async (msg) => {
     if (msg !== null) {
         const messageContent = msg.content.toString();
         console.log('Received message from queue:', messageContent);
@@ -34,16 +37,18 @@ channel.consume('auth_notification_queue', async (msg) => {
 
             await sendEmail(email, subject, text, html);
             
-            channel.ack(msg);
+            getChannel().ack(msg);
         } catch (error) {
             console.error('Error processing message:', error);
             // Optionally, you can choose to nack the message to requeue it
-            // channel.nack(msg);
+            // getChannel().nack(msg);
         }
     } else {
         console.log('Received null message');
     }
-})
+};
+
+registerConsumer(onMessage);
 
 
 

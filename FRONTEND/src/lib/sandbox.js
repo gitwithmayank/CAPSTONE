@@ -109,7 +109,12 @@ export async function detectBackend() {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), BACKEND_TIMEOUT)
   try {
-    const res = await fetch(`${API_BASE}/api/sandbox/health`, { signal: controller.signal })
+    // Public route, but we still send cookies so it behaves exactly like the
+    // protected calls that follow it.
+    const res = await fetch(`${API_BASE}/api/sandbox/health`, {
+      signal: controller.signal,
+      credentials: 'include',
+    })
     return res.ok
   } catch {
     return false
@@ -118,18 +123,107 @@ export async function detectBackend() {
   }
 }
 
-export async function createSandbox() {
-  const res = await fetch(`${API_BASE}/api/sandbox/start`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
+// ---------------------------------------------------------------------------
+// Protected sandbox API client.
+//
+// The routes under /api/sandbox are guarded by authMiddleware
+// (sandbox/server/src/middlewares/auth.middleware.js), which reads the JWT from
+// either the `token` cookie or an Authorization header. The auth service sets
+// that cookie (httpOnly) after the Google login redirect, therefore every call
+// below is made with `credentials: 'include'` so the cookie travels along.
+//
+//   GET  /api/sandbox/projects -> { message, projects: [...] }
+//   POST /api/sandbox/project  -> { message, project }        body: { title }
+//   POST /api/sandbox/start    -> { message, sandboxId, projectId, previewUrl }
+//                                                            body: { projectId }
+//
+// Responses are normalised: the backend wraps documents ({ project },
+// { projects }) while plain arrays/documents are also tolerated.
+// ---------------------------------------------------------------------------
+
+async function apiRequest(path, { method = 'GET', body } = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    credentials: 'include', // <- send the auth cookie on every protected call
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
   })
-  if (!res.ok) throw new Error(`Sandbox backend responded with ${res.status}`)
-  const json = await res.json().catch(() => null)
-  if (!json?.sandboxId) throw new Error('Sandbox backend did not return a sandboxId')
+
+  const data = await res.json().catch(() => null)
+
+  if (!res.ok) {
+    const error = new Error(
+      data?.message || data?.error || `Request failed with status ${res.status}`,
+    )
+    error.status = res.status
+    error.body = data
+    throw error
+  }
+
+  return data
+}
+
+// Full-page navigation into the auth service: it runs the Google OAuth dance
+// and redirects back with the `token` cookie set. Needed because every sandbox
+// route is protected.
+export function signInWithGoogle() {
+  window.location.href = `${API_BASE}/api/auth/google`
+}
+
+function projectFrom(payload) {
+  const project = payload?.project ?? payload
+  if (!project || typeof project !== 'object') return null
+  const id = project._id ?? project.id
+  if (!id) return null
+  return { ...project, id: String(id) }
+}
+
+export function normalizeProjects(payload) {
+  const list = Array.isArray(payload)
+    ? payload
+    : payload?.projects ?? (payload?.project ? [payload.project] : [])
+  return list.map(projectFrom).filter(Boolean)
+}
+
+export function normalizeProject(payload) {
+  return projectFrom(payload)
+}
+
+// GET /api/sandbox/projects  (falls back to the singular spelling if a
+// deployment only exposes /api/sandbox/project for reads)
+export async function listProjects() {
+  try {
+    return await apiRequest('/api/sandbox/projects')
+  } catch (err) {
+    if (err.status !== 404) throw err
+    return apiRequest('/api/sandbox/project')
+  }
+}
+
+// POST /api/sandbox/project { title } — title is required by the backend.
+export async function createProject(title) {
+  const clean = typeof title === 'string' ? title.trim() : ''
+  if (!clean) throw new Error('Project title is required')
+  return apiRequest('/api/sandbox/project', { method: 'POST', body: { title: clean } })
+}
+
+// POST /api/sandbox/start { projectId } -> { sandboxId, previewUrl }
+export async function startSandbox(projectId) {
+  if (!projectId) throw new Error('projectId is required to start a sandbox')
+
+  const json = await apiRequest('/api/sandbox/start', {
+    method: 'POST',
+    body: { projectId },
+  })
+
+  const sandboxId = json?.sandboxId
+  if (!sandboxId) throw new Error('Sandbox backend did not return a sandboxId')
+
   return {
-    sandboxId: json.sandboxId,
-    previewUrl: json.previewUrl || `http://${json.sandboxId}.preview.localhost`,
+    sandboxId,
+    projectId: json.projectId ?? projectId,
+    previewUrl: json.previewUrl || `http://${sandboxId}.preview.localhost`,
+    message: json.message,
   }
 }
 
@@ -139,6 +233,7 @@ async function invokeAgent(prompt, projectId, { onStatus, onChunk } = {}) {
   onStatus?.('Sending prompt to the AI builder…')
   const res = await fetch(`${API_BASE}/api/ai/invoke`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: prompt, projectId }),
   })

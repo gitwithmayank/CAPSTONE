@@ -1,14 +1,24 @@
 import nodemailer from "nodemailer";
 
+// Agar EMAIL_PASSWORD (Gmail App Password) set hai to usko use karo —
+// ye expire nahi hota. Warna OAuth2 refresh token (ye Testing-mode apps
+// me har 7 din expire ho jata hai -> "invalid_grant" error).
+const authConfig = process.env.EMAIL_PASSWORD
+    ? {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASSWORD,
+      }
+    : {
+          type: "OAuth2",
+          user: process.env.EMAIL_USER,
+          clientId: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
+      };
+
 const transporter = nodemailer.createTransport({
     service: "gmail",
-    auth: {
-        type: "OAuth2",
-        user: process.env.EMAIL_USER,
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
-    },
+    auth: authConfig,
 });
 
 transporter.verify((error, success) => {
@@ -33,6 +43,11 @@ transporter.verify((error, success) => {
     console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
   } catch (error) {
     console.error('Error sending email:', error);
+    if (error.code === 'EAUTH') {
+      console.error(
+        '=> Gmail auth fail (invalid_grant). Fix: EMAIL_PASSWORD (App Password) set karo ya naya GOOGLE_REFRESH_TOKEN generate karo.'
+      );
+    }
   }
 }
 

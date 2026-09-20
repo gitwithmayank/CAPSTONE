@@ -15,6 +15,10 @@ spec:
         app: sandbox
     spec:
       serviceAccountName: resource-manager
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
       containers:
         - name: main-sandbox-container
           image: sandbox:latest

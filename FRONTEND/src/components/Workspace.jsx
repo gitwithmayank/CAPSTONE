@@ -5,7 +5,7 @@ import TerminalPanel from './TerminalPanel.jsx'
 import { LogoMark, PlusIcon, SparklesIcon } from './Icons.jsx'
 import { chatWithAI, starterSandbox } from '../lib/sandbox.js'
 
-export default function Workspace({ sandboxId, live, previewUrl, onNewSandbox }) {
+export default function Workspace({ sandboxId, projectId, live, previewUrl, onNewSandbox }) {
   const [html, setHtml] = useState(() => (live ? null : starterSandbox()))
   const [generating, setGenerating] = useState(false)
   const [status, setStatus] = useState('')
@@ -16,6 +16,11 @@ export default function Workspace({ sandboxId, live, previewUrl, onNewSandbox })
     setStatus(live ? 'Contacting the AI builder…' : 'Thinking about your request…')
     try {
       const res = await chatWithAI(prompt, {
+        // NOTE: the agent resolves the in-cluster project service as
+        // `sandbox-service-${projectId}` (ai-orchestration/src/agents/tools.js)
+        // and those services are created per *sandbox* id
+        // (sandbox/server/src/kubernetes/service.js), so the AI gets the
+        // sandboxId here. The DB projectId is kept for the /api/sandbox calls.
         projectId: live ? sandboxId : null,
         onStatus: setStatus,
       })
@@ -45,6 +50,15 @@ export default function Workspace({ sandboxId, live, previewUrl, onNewSandbox })
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
             <span className="truncate">{sandboxId}</span>
           </span>
+          {projectId && (
+            <span
+              title={`projectId: ${projectId}`}
+              className="hidden max-w-[180px] items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[11px] text-slate-500 sm:inline-flex"
+            >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400" />
+              <span className="truncate">{projectId}</span>
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <span className="hidden items-center gap-1.5 text-[11px] font-medium text-emerald-400 md:inline-flex">
