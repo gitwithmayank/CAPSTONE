@@ -5,3 +5,4 @@ node_modules/
 dist/
 build/
 secrets.yml
+fix-coredns.yml
