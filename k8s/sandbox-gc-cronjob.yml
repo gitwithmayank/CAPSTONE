@@ -1,0 +1,65 @@
+﻿# ---------------------------------------------------------------------------
+# Sandbox GC CronJob.
+#
+# Har 5 minute `node src/gc.js` chalata hai, jo idle/timeout sandbox pods +
+# services delete kar deta hai. Iske bina purane sandbox hamesha chalte rehte
+# hain, cluster ka CPU bhar jata hai, aur naya sandbox Pending me atak jata hai
+# ("0/2 nodes are available: 2 Insufficient cpu").
+#
+# serviceAccountName: resource-manager â€” k8s/rbac.yml me bana hai, usko
+# pods + services par get/list/watch/create/delete ki permission hai.
+#
+# Apply:  kubectl apply -f k8s/sandbox-gc-cronjob.yml
+# Manual: kubectl create job --from=cronjob/sandbox-gc sandbox-gc-manual
+#         kubectl logs job/sandbox-gc-manual
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sandbox-gc
+  labels:
+    app: sandbox-gc
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: sandbox-gc
+        spec:
+          serviceAccountName: resource-manager
+          restartPolicy: Never
+          containers:
+            - name: gc
+              # wahi image jo sandbox server chalata hai â€” usme ioredis +
+              # @kubernetes/client-node already installed hain.
+              image: 777171524883.dkr.ecr.ap-south-1.amazonaws.com/capstone-sandbox:v4
+              imagePullPolicy: IfNotPresent
+              command: ["node", "src/gc.js"]
+              env:
+                - name: SANDBOX_NAMESPACE
+                  value: default
+                # 2 ghante se purana sandbox chalu ho to bhi hata do (leak safety).
+                - name: SANDBOX_MAX_AGE_MINUTES
+                  value: "120"
+                - name: REDIS_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: database
+                      key: REDIS_URL
+                - name: MONGO_URI
+                  valueFrom:
+                    secretKeyRef:
+                      name: database
+                      key: SANDBOX
+              resources:
+                requests:
+                  cpu: "50m"
+                  memory: "64Mi"
+                limits:
+                  cpu: "200m"
+                  memory: "192Mi"

@@ -22,7 +22,7 @@ export async function createPod(sandboxId,projectId) {
             initContainers: [
                 {
                     name: "init-container",
-                    image: "template",
+                    image: "777171524883.dkr.ecr.ap-south-1.amazonaws.com/capstone-template",
                     imagePullPolicy: "IfNotPresent",
                     command: [ 'sh', "-c", 'cp -r /workspace/. /seed/'],
                     volumeMounts: [
@@ -36,14 +36,17 @@ export async function createPod(sandboxId,projectId) {
             ],
             containers:[
                 {
-                    image: "template",
+                    image: "777171524883.dkr.ecr.ap-south-1.amazonaws.com/capstone-template",
                     imagePullPolicy: "IfNotPresent",
                     name: 'sandbox-container',
                     command: ["npm", "run", "dev"],
                     ports: [{containerPort: 5173, name: "http"}],
+                    // Requests chhote rakhe hain taaki ek node par zyada sandbox fit
+                    // ho (scheduling sirf requests dekhta hai). Limits me Vite dev
+                    // server ko burst karne ki poori jagah hai.
                     resources:{
-                        limits: {cpu: "500m",memory: "1Gi"},
-                        requests: {cpu : "250m",memory: "500Mi"}
+                        limits: {cpu: "600m",memory: "1Gi"},
+                        requests: {cpu : "100m",memory: "256Mi"}
                     },
                     volumeMounts:[
                         {
@@ -53,13 +56,16 @@ export async function createPod(sandboxId,projectId) {
                     ]
                 },
                 {
-                    image: "agent",
+                    // NOTE: tag immutable rakho (:v2). ":latest" + IfNotPresent ke
+                    // saath naya build kabhi pull nahi hota (stale agent chal jata
+                    // hai). Naya fix push karo to tag badha kar yahan update karo.
+                    image: "777171524883.dkr.ecr.ap-south-1.amazonaws.com/capstone-agent:v2",
                     imagePullPolicy: "IfNotPresent",
                     name: 'agent-container',
                     ports: [{containerPort: 3000, name: "http"}],
                     resources:{
-                        limits: {cpu: "500m",memory: "1Gi"},
-                        requests: {cpu : "250m",memory: "500Mi"}
+                        limits: {cpu: "300m",memory: "512Mi"},
+                        requests: {cpu : "100m",memory: "256Mi"}
                     },
                     volumeMounts:[
                         {
@@ -72,7 +78,7 @@ export async function createPod(sandboxId,projectId) {
                 {
                     // Keeps ./workspace mirrored to S3 under the project's own
                     // prefix ("credscoop-bucket/<PROJECT_ID>/...").
-                    image: "sync-agent",
+                    image: "777171524883.dkr.ecr.ap-south-1.amazonaws.com/capstone-sync-agent",
                     imagePullPolicy: "IfNotPresent",
                     name: 'sync-agent-container',
                     env: [
@@ -95,8 +101,8 @@ export async function createPod(sandboxId,projectId) {
                         }
                     ],
                     resources: {
-                        requests: { cpu: "50m", memory: "64Mi" },
-                        limits: { cpu: "200m", memory: "256Mi" }
+                        requests: { cpu: "25m", memory: "48Mi" },
+                        limits: { cpu: "100m", memory: "128Mi" }
                     },
                     volumeMounts: [
                         {

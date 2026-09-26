@@ -38,7 +38,11 @@ router.get("/google/callback", passport.authenticate("google", {
   const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
   res.cookie("token", token, {httpOnly: true });
 
-     res.redirect("http://localhost:5173");
+  // Deployed setup: frontend bhi isi origin (ingress) se serve hota hai, isliye
+  // relative root par bhejna correct hai. Pehle "http://localhost:5173" hardcoded
+  // tha jo local dev me theek tha par cluster me user ko localhost par bhej deta.
+  // FRONTEND_URL set hone par wahi use hota hai (e.g. custom domain ke liye).
+     res.redirect(process.env.FRONTEND_URL || "/");
     } catch (error) {
       console.error("Error during Google authentication callback:", error);
       res.redirect("/");

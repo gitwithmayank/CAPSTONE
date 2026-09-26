@@ -1,0 +1,24 @@
+# Let's Encrypt (ACME) ClusterIssuer — cert-manager se HTTPS certificates issue
+# karne ke liye. HTTP-01 challenge use hota hai, isliye Let's Encrypt ko
+# http://<domain>/.well-known/acme-challenge/... par reach karna hoga — matlab
+# domain ka DNS pehle is cluster ke ingress (ELB) par point hona chahiye.
+#
+# Apply:  kubectl apply -f k8s/cert-issuer.yml
+#
+# Certificate khud-b-khud issue hota hai kyunki ingress me ye annotation hai:
+#   cert-manager.io/cluster-issuer: letsencrypt-prod
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    # Let's Encrypt isi email par expiry warnings bhejta hai.
+    email: mayank.jan2006@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+    - http01:
+        ingress:
+          ingressClassName: nginx

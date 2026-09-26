@@ -34,7 +34,7 @@ TOOLS — HOW TO USE THEM
 
 Rules:
 - Always \`list_files\` → \`read_files\` → reason → \`update_files\`. Skipping the read step is the most common cause of bugs.
-- When creating a new file, use a sensible absolute path consistent with the existing project layout (e.g., \`/app/src/components/Hero.jsx\`).
+- ALL file paths MUST be absolute and start with \`/workspace\` — that is the project root mounted inside the sandbox. Examples: \`/workspace/src/components/Hero.jsx\`, \`/workspace/src/App.jsx\`, \`/workspace/src/index.css\`, \`/workspace/index.html\`. NEVER use \`/app/...\` and NEVER use a bare \`/src/...\` — those paths silently write into a wrong nested folder, the dev server then fails to resolve the import, and the live preview breaks. Mirror exactly the paths that \`list_files\` returns.
 - Do not delete files unless explicitly asked. To "remove" something, refactor it out and update the imports.
 - After a batch of updates, briefly confirm what changed. Do not re-print the full file contents in chat.
 

@@ -1,0 +1,76 @@
+# DuckDNS IP auto-refresh.
+#
+# Kyun chahiye: ingress-nginx service type=LoadBalancer ek Classic ELB banata hai
+# jiska public IP AWS maintenance/scaling par BADAL sakta hai. DuckDNS ek static
+# A record rakhta hai, isliye record purana pad jaata to poora domain (aur uske
+# saath HTTPS cert ka renewal) toot jata hai.
+#
+# Ye CronJob har 5 minute:
+#   1. ELB hostname ko cluster ke DNS se resolve karta hai (dns.resolve4)
+#   2. DuckDNS update API ko wahi IP bhej deta hai
+#
+# Prerequisite secret (token ko file me commit NAHI karna):
+#   kubectl create secret generic duckdns -n default \
+#     --from-literal=DUCKDNS_TOKEN='<aapka-token>'
+#
+# Apply:  kubectl apply -f k8s/duckdns-cronjob.yml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: duckdns-ip-refresh
+  labels:
+    app: duckdns-ip-refresh
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: duckdns-ip-refresh
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: updater
+              image: node:20-alpine
+              command:
+                - node
+                - -e
+                - |
+                  const dns = require('dns').promises;
+                  (async () => {
+                    const ips = await dns.resolve4(process.env.ELB_HOST);
+                    if (!ips || !ips.length) throw new Error('ELB ka koi A record nahi mila');
+                    const ip = ips[0];
+                    const url = 'https://www.duckdns.org/update'
+                      + '?domains=' + encodeURIComponent(process.env.DUCKDNS_DOMAIN)
+                      + '&token=' + encodeURIComponent(process.env.DUCKDNS_TOKEN)
+                      + '&ip=' + encodeURIComponent(ip);
+                    const res = await fetch(url);
+                    const body = (await res.text()).trim();
+                    console.log(new Date().toISOString() + ' duckdns update -> ip=' + ip + ' response=' + body);
+                    // DuckDNS "OK" (update hua) ya "KO" (token galat) deta hai.
+                    if (body !== 'OK' && body !== 'KO') throw new Error('unexpected response: ' + body);
+                    if (body === 'KO') throw new Error('DuckDNS ne token reject kiya');
+                  })().catch((err) => { console.error(err); process.exit(1); });
+              env:
+                - name: ELB_HOST
+                  value: a84ff92cbfbdd462ca0b525ef1a240a6-1217388270.ap-south-1.elb.amazonaws.com
+                - name: DUCKDNS_DOMAIN
+                  value: aisandbox
+                - name: DUCKDNS_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: duckdns
+                      key: DUCKDNS_TOKEN
+              resources:
+                requests:
+                  cpu: "50m"
+                  memory: "64Mi"
+                limits:
+                  cpu: "200m"
+                  memory: "128Mi"

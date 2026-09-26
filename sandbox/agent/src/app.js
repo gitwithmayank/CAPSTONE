@@ -11,6 +11,36 @@ import cors from 'cors';
 
 const WORKING_DIR = '/workspace';
 
+/**
+ * LLM se aane wale file paths ko /workspace ke andar safely resolve karta hai.
+ *
+ * KYUN: model kabhi `/app/src/App.jsx` bhejta hai, kabhi `/src/App.jsx`, kabhi
+ * `src/App.jsx`. Plain `path.join(WORKING_DIR, file)` `/app/...` ko
+ * `/workspace/app/...` bana deta tha — yaani files galat nested folder me chali
+ * jaati thi, Vite unhe resolve nahi kar paata, par API 200 OK deti rehti thi
+ * (silent failure). Isi wajah se preview par "Failed to resolve import" aata tha.
+ *
+ * Ab teeno forms /workspace/src/App.jsx par map hote hain, aur `..` ke through
+ * workspace se bahar nikalne ki koshish reject ho jaati hai.
+ */
+function resolveWorkspacePath(file) {
+    let rel = String(file ?? '').replace(/\\/g, '/').trim();
+
+    // Already-correct prefix, galat "/app" prefix, ya bare leading slash — sab hata do
+    rel = rel.replace(/^\/workspace(?=\/|$)/, '');
+    rel = rel.replace(/^\/app(?=\/|$)/, '');
+    rel = rel.replace(/^\/+/, '');
+
+    const resolved = path.resolve(WORKING_DIR, rel);
+
+    // Path traversal guard: resolved path /workspace ke andar hi hona chahiye
+    if (resolved !== WORKING_DIR && !resolved.startsWith(WORKING_DIR + path.sep)) {
+        throw new Error(`Refusing to touch a path outside the workspace: ${file}`);
+    }
+
+    return resolved;
+}
+
 const app = express();
 const httpServer = http.createServer(app);
 
@@ -142,7 +172,7 @@ app.get("/read-files", async (req, res) => {
     const fileList = files.split(',');
 
     const results = await Promise.all(fileList.map(async (file) => {
-        const filePath = path.join(WORKING_DIR, file);
+        const filePath = resolveWorkspacePath(file);
         try {
             const content = await fs.promises.readFile(filePath, 'utf-8');
             return {
@@ -180,7 +210,7 @@ app.patch("/update-files", async (req, res) => {
 
     const results = await Promise.all(updates.map(async (update) => {
         const { file, content } = update;
-        const filePath = path.join(WORKING_DIR, file);
+        const filePath = resolveWorkspacePath(file);
         try {
 
             console.log(path.dirname(filePath), filePath);
@@ -220,7 +250,7 @@ app.post("/create-files", async (req, res) => {
 
     const results = await Promise.all(files.map(async (fileObj) => {
         const { file, content } = fileObj;
-        const filePath = path.join(WORKING_DIR, file);
+        const filePath = resolveWorkspacePath(file);
         try {
 
             await fs.promises.mkdir(path.dirname(filePath), { recursive: true });

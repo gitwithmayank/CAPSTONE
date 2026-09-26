@@ -21,7 +21,7 @@ spec:
             value: "1"
       containers:
         - name: main-sandbox-container
-          image: sandbox:latest
+          image: 777171524883.dkr.ecr.ap-south-1.amazonaws.com/capstone-sandbox
           imagePullPolicy: IfNotPresent
 
           resources:

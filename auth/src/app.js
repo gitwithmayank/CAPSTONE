@@ -9,6 +9,13 @@ import authRoutes from "./routes/auth.routes.js";
 
 const app = express();
 
+// nginx-ingress TLS terminate karta hai aur app tak request HTTP me aati hai,
+// isliye Express ko batana padta hai ki wo ek proxy ke peeche hai. Iske bina
+// passport-oauth2 relative callbackURL ko "http://..." bana deta hai aur
+// Google non-localhost http redirect URI accept nahi karta.
+// trust proxy + nginx ka X-Forwarded-Proto header => req.originalURL https ban jata hai.
+app.set("trust proxy", 1);
+
 app.use("/api/auth", authRoutes);
 
 app.use(morgan("dev"));

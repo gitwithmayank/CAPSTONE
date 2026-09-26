@@ -1,0 +1,41 @@
+# Live-preview ke liye wildcard certificate.
+#
+# Kyun alag certificate (aur alag ClusterIssuer):
+#   - Wildcard ke liye ACME **DNS-01** challenge zaroori hai (HTTP-01 se wildcard
+#     possible nahi). Isliye DuckDNS webhook solver chahiye.
+#   - DuckDNS har domain par ek hi TXT record rakhta hai, isliye ek Certificate me
+#     multiple dnsNames daalna risky hai. Apex (HTTP-01, k8s/cert-issuer.yml) aur
+#     preview wildcard (DNS-01, ye file) alag rakhe gaye hain.
+#
+# Prerequisites (ek baar):
+#   # DuckDNS token secret
+#   kubectl create secret generic duckdns --from-literal=DUCKDNS_TOKEN='<token>'
+#
+#   # DuckDNS webhook solver (helm chart)
+#   helm install cmwd <chart-dir> --namespace cert-manager \
+#     --set duckdns.token='<token>' \
+#     --set clusterIssuer.production.create=true \
+#     --set clusterIssuer.email=mayank.jan2006@gmail.com
+#
+#   # webhook ko webhook Ka certificate approve karna padta hai:
+#   kubectl get csr -o name | xargs kubectl certificate approve
+#
+# Apply:  kubectl apply -f k8s/cert-wildcard.yml
+#
+# Uske baad k8s/ingress.yml (codespace-ingress) me tls block add karna hai:
+#   tls:
+#   - hosts:
+#     - "*.preview.aisandbox.duckdns.org"
+#     secretName: preview-wildcard-tls
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: preview-wildcard-tls
+  namespace: default
+spec:
+  secretName: preview-wildcard-tls
+  issuerRef:
+    name: cmwd-cert-manager-webhook-duckdns-production
+    kind: ClusterIssuer
+  dnsNames:
+  - "*.preview.aisandbox.duckdns.org"

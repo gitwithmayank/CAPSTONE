@@ -1,0 +1,32 @@
+# Classic ELB hostname -> canonical domain par permanent redirect.
+#
+# KYUN: ingress-nginx ka LoadBalancer ek Classic ELB banata hai jiska hostname
+# (a84ff...elb.amazonaws.com) bhi publicly reachable hai. Agar koi us URL par app
+# kholta hai to Google OAuth ka redirect_uri bhi wahi hostname ban jata hai, jo
+# Console me registered nahi hota -> "Error 400: redirect_uri_mismatch".
+# Ye ingress us host ke saare requests ko canonical domain par 308 kar deta hai,
+# taaki sirf EK URL ho aur OAuth hamesha sahi host use kare.
+#
+# 308 isliye (301 nahi): method (POST) preserve rehta hai.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: elb-redirect-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/permanent-redirect: https://aisandbox.duckdns.org$request_uri
+    nginx.ingress.kubernetes.io/permanent-redirect-code: "308"
+  labels:
+    app.kubernetes.io/name: elb-redirect-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: "a84ff92cbfbdd462ca0b525ef1a240a6-1217388270.ap-south-1.elb.amazonaws.com"
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 80

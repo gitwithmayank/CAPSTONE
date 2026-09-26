@@ -1,0 +1,84 @@
+# Frontend (Vite build, nginx ke through serve hota hai) + primary HTTPS domain.
+#
+# Ye ingress do kaam karta hai:
+#
+#   1. Hostless "/" -> frontend-service. Isse cluster ka ELB URL bhi kaam karta
+#      hai: http://<elb-hostname>/ (codespace-ingress ke hostless /api/* rules
+#      nginx longest-prefix match se jeet jate hain, isliye API happy rehti hai).
+#
+#   2. "aisandbox.duckdns.org" host ke liye poora rule set + TLS. Yahan /api/*
+#      rules repeat karne padte hain kyunki nginx-ingress har host ke liye alag
+#      server block banata hai — hostless rules us block me inherit NAHI hote.
+#      cert-manager `tls` secret ko automatically Let's Encrypt se issue karta hai.
+#
+# Isi single origin se serve karne ka fayda:
+#   - auth cookie (httpOnly `token`, credentials: 'include') same-origin rehta hai
+#   - Google OAuth callback (/api/auth/google/callback) relative path par chalta hai
+#   - CORS ki zaroorat nahi padti
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-ingress
+  annotations:
+    # codespace-ingress ke same timeouts: /api/ai/invoke SSE stream aur
+    # sandbox terminal (WebSocket) ke liye lamba timeout chahiye.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "6000"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "6000"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "6000"
+    # Session affinity — SSE/WS ek hi pod par tikne chahiye.
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/session-cookie-name: "codespace-ingress"
+    nginx.ingress.kubernetes.io/session-cookie-hash: "sha1"
+    # Let's Encrypt certificate automatically issue/rotate hota hai.
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  labels:
+    app.kubernetes.io/name: frontend-ingress
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - aisandbox.duckdns.org
+    secretName: aisandbox-duckdns-tls
+  rules:
+  - http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 80
+
+  - host: "aisandbox.duckdns.org"
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/api/sandbox"
+        backend:
+          service:
+            name: sandbox-service
+            port:
+              number: 80
+      - pathType: Prefix
+        path: "/api/ai"
+        backend:
+          service:
+            name: ai-service
+            port:
+              number: 80
+      - pathType: Prefix
+        path: "/api/auth"
+        backend:
+          service:
+            name: auth-service
+            port:
+              number: 80
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 80
+

@@ -1,0 +1,11 @@
+# Google / Bing ko poora site crawl karne do
+User-agent: *
+Allow: /
+
+# API routes crawl karne ka koi matlab nahi (aur ye auth-protected hain)
+Disallow: /api/
+
+# Per-sandbox preview domains alag host hain, unhe crawl karne ki zaroorat nahi
+Disallow: /healthz
+
+Sitemap: https://aisandbox.duckdns.org/sitemap.xml

@@ -77,7 +77,14 @@ router.post("/start",authMiddleware,async (req,res)=>{
       message: 'sandbox environment created successfully',
       sandboxId,
       projectId: project._id,
-      previewUrl: `http://${sandboxId}.preview.localhost`,
+      // Preview URL: k8s/ingress.yml me "*.preview.<PREVIEW_DOMAIN>" host rule
+      // router-service par jata hai, aur router host ka pehla label dekh kar
+      // us sandbox ke service par proxy karta hai.
+      //
+      // PREVIEW_SCHEME default "https" hai kyunki frontend bhi HTTPS par chalta
+      // hai — warna browser mixed-content block kar dega. Local dev ke liye
+      // PREVIEW_SCHEME=http PREVIEW_DOMAIN=preview.localhost set kar lo.
+      previewUrl: `${process.env.PREVIEW_SCHEME || "https"}://${sandboxId}.preview.${process.env.PREVIEW_DOMAIN || "aisandbox.duckdns.org"}`,
     });
   } catch (err) {
     console.error('Error starting sandbox:', err);

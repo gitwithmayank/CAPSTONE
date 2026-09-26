@@ -20,7 +20,7 @@ spec:
             value: "1"
       containers:
         - name: auth-container
-          image: auth
+          image: 777171524883.dkr.ecr.ap-south-1.amazonaws.com/capstone-auth
           imagePullPolicy: IfNotPresent
 
           resources:

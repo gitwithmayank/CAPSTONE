@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: router-server
-          image: router
+          image: 777171524883.dkr.ecr.ap-south-1.amazonaws.com/capstone-router
 
           resources:
             requests:

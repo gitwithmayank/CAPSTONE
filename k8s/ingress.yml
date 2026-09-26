@@ -8,13 +8,21 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "6000"
 
     nginx.ingress.kubernetes.io/affinity: "cookie"
-    ngninx.ingress.kubernetes.io/session-cookie-name: "codespace-ingress"
-    nginx.ingress.kubernetes.io/session-cookie-hash: "/"
+    nginx.ingress.kubernetes.io/session-cookie-name: "codespace-ingress"
+    nginx.ingress.kubernetes.io/session-cookie-hash: "sha1"
 
   labels:
     app.kubernetes.io/name: codespace-ingress
 spec:
   ingressClassName: nginx
+  # Live-preview wildcard ke liye TLS. Certificate k8s/cert-wildcard.yml se
+  # banta hai (DNS-01 challenge, DuckDNS webhook solver ke through). Iske bina
+  # iframe HTTPS page se http:// preview load karne par browser mixed-content
+  # block kar deta hai.
+  tls:
+  - hosts:
+    - "*.preview.aisandbox.duckdns.org"
+    secretName: preview-wildcard-tls
   rules:
   - http:
       paths:
@@ -48,7 +56,7 @@ spec:
               number: 80
 
 
-  - host: "*.preview.localhost"
+  - host: "*.preview.aisandbox.duckdns.org"
     http:
       paths:
       - pathType: Prefix
@@ -60,7 +68,7 @@ spec:
               number: 80
 
 
-  - host: "*.agent.localhost"
+  - host: "*.agent.aisandbox.duckdns.org"
     http:
       paths:
       - pathType: Prefix

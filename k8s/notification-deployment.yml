@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: notification-server
-          image: notification
+          image: 777171524883.dkr.ecr.ap-south-1.amazonaws.com/capstone-notification
           resources:
             requests:
               cpu: "150m"
