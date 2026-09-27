@@ -16,7 +16,11 @@ spec:
     spec:
       containers:
         - name: ai-server
-          image: 777171524883.dkr.ecr.ap-south-1.amazonaws.com/capstone-ai-orchestration
+          # Tag immutable rakho aur har fix par badhao — ":latest" + Always ke
+          # saath rollbacks mushkil ho jate hain. Live deployment isi tag se
+          # chalni chahiye (kubectl set image), warna repo aur cluster drift
+          # kar jate hain.
+          image: 777171524883.dkr.ecr.ap-south-1.amazonaws.com/capstone-ai-orchestration:v3
 
           resources:
             requests:
@@ -31,6 +35,16 @@ spec:
                 secretKeyRef:
                   name: ai-secret
                   key: MISTRAL_API_KEY
+            # Mistral SDK har request par hard-coded 30 s ka AbortSignal.timeout
+            # lagata hai. Bade builds (poora page ek hi step me) 30 s cross karte
+            # hi "The operation was aborted due to timeout" par mar jate the —
+            # isliye code us deadline ko is value se replace karta hai
+            # (src/agents/code.agent.js -> extendRequestTimeout).
+            - name: AI_REQUEST_TIMEOUT_MS
+              value: "600000"
+            # Model call fail hone par retries (LangChain default 6).
+            - name: AI_MODEL_RETRIES
+              value: "2"
 
           livenessProbe:
             httpGet:

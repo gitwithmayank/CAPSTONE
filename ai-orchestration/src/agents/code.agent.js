@@ -3,12 +3,66 @@ import { ChatMistralAI} from "@langchain/mistralai";
 import { listFiles, readFiles, updateFiles } from "./tools.js";
 import { createAgent } from "langchain";
 
+// ---------------------------------------------------------------------------
+// Mistral request timeout.
+//
+// PROBLEM (yeh bug tha):
+//   @langchain/mistralai ka ChatMistralAI apna Mistral client `timeoutMs` ke
+//   BINA banata hai (chat_models.js -> completionWithRetry), isliye SDK ka
+//   hard-coded default lag jata hai:
+//
+//     @mistralai/mistralai/esm/funcs/chatStream.js
+//       timeoutMs: options?.timeoutMs || client._options.timeoutMs || 30000
+//     @mistralai/mistralai/esm/lib/sdks.js
+//       if (!fetchOptions?.signal && conf.timeoutMs > 0)
+//           fetchOptions.signal = AbortSignal.timeout(conf.timeoutMs)
+//
+//   `AbortSignal.timeout()` ek ABSOLUTE deadline hai (idle timeout nahi), to
+//   jo bhi model call 30 s se zyada leti hai wo beech me hi abort ho jati hai:
+//
+//     RequestTimeoutError: Request timed out:
+//       TimeoutError: The operation was aborted due to timeout
+//
+//   Streaming response ka body padhte waqt abort hone par SDK woh error wrap
+//   nahi karta, isliye raw DOMException upar tak chala jata hai aur UI par
+//   dikhta hai:
+//     "Backend error: The operation was aborted due to timeout"
+//
+//   Chhote prompt (~15 s, snake game) pass ho jate the; bade prompts (poora
+//   page/component tree ek hi step me) 30 s cross karte hi mar jate the.
+//
+// FIX:
+//   LangChain woh `timeoutMs` expose nahi karta, lekin `beforeRequestHooks`
+//   deta hai — aur Mistral SDK har hook ko HTTPClient.beforeRequest ke through
+//   fully-built Request par chalata hai (ChatMistralAI constructor ke andar
+//   addAllHooksToHttpClient() khud call hota hai). Bas request ko apne lambe
+//   deadline ke saath rebuild kar do.
+//
+//   Override karne ke liye: AI_REQUEST_TIMEOUT_MS=1200000 (20 min),
+//   ya 0 karke bilkul disable.
+// ---------------------------------------------------------------------------
+const MODEL_REQUEST_TIMEOUT_MS = Number(process.env.AI_REQUEST_TIMEOUT_MS || 600000);
 
+/**
+ * SDK ke 30 s `AbortSignal.timeout` ko apne deadline se replace karta hai.
+ * `undefined` return karne par SDK original request hi use karta hai.
+ */
+const extendRequestTimeout = (request) => {
+    if (!Number.isFinite(MODEL_REQUEST_TIMEOUT_MS) || MODEL_REQUEST_TIMEOUT_MS <= 0) return undefined;
+    if (request.signal?.aborted) return undefined;
+    return new Request(request, { signal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS) });
+};
 
 const model = new ChatMistralAI({
     model: "codestral-latest",
     apiKey: process.env.MISTRALAI_API_KEY || process.env.MISTRAL_API_KEY,
     "temperature": 0.7,
+    // Mistral SDK ka hard-coded 30 s timeout hatao (upar explanation dekho) —
+    // iske bina bade builds "The operation was aborted due to timeout" par
+    // mar jate the.
+    beforeRequestHooks: [ extendRequestTimeout ],
+    // Default 6 retries + 30 s timeout = ~3 min waste. Ab 2 kaafi hai.
+    maxRetries: Number(process.env.AI_MODEL_RETRIES ?? 2),
 })
 
 const agent = (createAgent({
